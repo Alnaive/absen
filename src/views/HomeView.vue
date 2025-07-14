@@ -1,42 +1,56 @@
 <template>
-  <section class="text-gray-600 body-font">
-    <div class="container px-5 py-24 mx-auto">
-      <div class="lg:w-2/3 flex flex-col sm:flex-row sm:items-center items-start mx-auto">
-        <h1 class="flex-grow sm:pr-16 text-2xl font-medium title-font text-gray-900">
-          Pilih raw data absensi
+  <section class="text-black dark:text-white bg-white dark:bg-base-100 body-font">
+    <div v-if="!groupedData" class="container px-5 py-12 mx-auto">
+      <div class="flex flex-col items-center space-y-5">
+        <h1 class="text-2xl font-medium title-font">
+          Data Absensi Karyawan
+        </h1>
+      </div>
+    </div>
+    <div v-else class="container px-5 py-12 mx-auto">
+      <div class="flex flex-col items-center space-y-5">
+        <h1 class="text-2xl font-medium title-font">
+          Input Data Absensi
         </h1>
         <input
           type="file"
           @change="handleFileChange"
-          class="file-input file-input-bordered"
+          class="file-input text-white file-input-info dark:file-input-success "
           accept=".xlsx,.xls"
         />
       </div>
     </div>
+     
   </section>
 
-  <div class="container mx-auto p-4">
+  <div class="text-black dark:text-white bg-white dark:bg-base-100 container mx-auto p-4">
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
       <div class="flex space-x-4">
-        <button
-          class="btn btn-success"
+        <button 
+          class="btn btn-success text-black dark:text-white bg-white dark:bg-base-100"
           @click="saveDataToLocalstorage"
           :disabled="!excelData.length"
         >
-          Save data to Local Storage
+          Simpan Data
+        </button>
+        <button
+          class="btn  text-black dark:text-white bg-red-500"
+          @click="removeDataLocalStorage"
+        >
+          Hapus Data
         </button>
         <button v-if="abData.length" class="btn btn-success" @click="exportDataToExcel">
           Export to Excel
         </button>
       </div>
 
-      <div class="w-full md:w-auto">
+      <div class="w-full md:w-auto ">
         <div class="relative">
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Search..."
-            class="input input-bordered w-full md:w-64 pl-10"
+            class="input input-bordered input-success w-full md:w-64 pl-10 text-black dark:text-white bg-white dark:bg-base-100"
             @input="debouncedSearch"
           />
           <span class="absolute left-3 top-1/2 transform -translate-y-1/2">
@@ -64,14 +78,14 @@
       <p>Processing data...</p>
     </div>
 
-    <div v-else-if="filteredData.length" class="overflow-x-auto bg-white rounded-lg shadow">
-      <table class="table w-full bg-gray-700">
+    <div v-else-if="filteredData.length" class="overflow-x-auto text-black dark:text-white bg-white dark:bg-gray-700 rounded-lg shadow">
+      <table class="table w-full text-black dark:text-white ">
         <thead>
           <tr>
             <th
               v-for="header in tableHeaders"
               :key="header"
-              class="cursor-pointer hover:bg-gray-100"
+              class="cursor-pointer text-black dark:text-white"
               @click="sortTable(header)"
             >
               <div class="flex items-center">
@@ -92,9 +106,9 @@
         </tbody>
       </table>
 
-      <div class="flex flex-col md:flex-row justify-between items-center p-4 border-t gap-4">
+      <div class="flex flex-col md:flex-row justify-between items-center p-4 border-t gap-4 text-black dark:text-white bg-white dark:bg-base-100">
         <div class="flex items-center gap-4">
-          <span class="text-sm text-gray-600">Items per page:</span>
+          <span class="text-sm ">Items per page:</span>
           <select
             v-model="pageSize"
             class="select select-bordered select-sm"
@@ -107,7 +121,7 @@
           </select>
         </div>
 
-        <div class="text-sm text-gray-600">
+        <div class="text-sm ">
           Showing {{ pagination.startItem }} to {{ pagination.endItem }} of
           {{ pagination.totalItems }} entries
         </div>
@@ -220,6 +234,14 @@ const saveDataToLocalstorage = () => {
   }
 }
 
+const removeDataLocalStorage = () => {
+  localStorage.removeItem('excelData')
+  dataExcel.value = []
+  processDataForDisplay()
+  alert('Data removed successfully')
+}
+
+
 const formatWaktu = (datetime) => {
   if (!datetime || typeof datetime !== 'string') {
     return { FormattedDateTime: '', DaysPart: '', DatePart: '', TimePart: '' }
@@ -250,12 +272,13 @@ const groupDataByNoID = () => {
   groupedData.value = dataExcel.value
     .filter((record) => record.Pengecualian !== 'Mengulang')
     .reduce((result, record) => {
-      const noID = record['No. ID']
-      const { DatePart, TimePart, DaysPart } = formatWaktu(record.Waktu)
+      const noID = record['No.ID']
+      const { DatePart, TimePart, DaysPart } = formatWaktu(record["Tgl/Waktu"])
 
       if (!result[noID]) {
         result[noID] = {
-          'No. ID': noID,
+          'No.ID': noID,
+          Department: record.Departemen,
           Nama: record.Nama,
           DateEntries: {},
         }
@@ -268,13 +291,22 @@ const groupDataByNoID = () => {
           'Jam Masuk Kerja': '',
           'Jam Pulang Kerja': '',
           'Terlambat Masuk Kerja': '',
-          Lembur: '',
-          'Status Absen': '',
+          // Lembur: '',
         }
       }
 
+
       const dateEntry = result[noID].DateEntries[DatePart]
       const status = record.Status
+
+      // Check if we already have a C/Masuk entry for this date
+      const hasMasukEntry = dateEntry.Entries.some(entry => entry.Status === 'C/Masuk')
+      
+      // Skip if this is a duplicate C/Masuk for the same date
+      if (status === 'C/Masuk' && hasMasukEntry) {
+        return result
+      }
+      
       const isLate = status === 'C/Masuk' && isLateArrival(TimePart)
       const isOvertime = (TimePart > '18:00' && status === 'C/Keluar') || DaysPart === 'Minggu'
       const isInvalid = record.Pengecualian === 'Invalid'
@@ -291,11 +323,11 @@ const groupDataByNoID = () => {
         dateEntry['Jam Pulang Kerja'] = TimePart
       }
 
+
       dateEntry.Entries.push({
-        Tanggal: formatWaktu(record.Waktu).FormattedDateTime,
+        Tanggal: formatWaktu(record["Tgl/Waktu"]).FormattedDateTime,
         Jam: TimePart,
         Hari: DaysPart,
-        Status: status,
       })
 
       return result
@@ -307,27 +339,34 @@ const groupDataByNoID = () => {
 
 const isLateArrival = (checkInTime) => {
   const [hours, minutes] = checkInTime.split(':').map(Number)
-  return hours > 8 || (hours === 8 && minutes > 0)
+  return hours > 8 || (hours === 8 && minutes > 30)
 }
 
 const flattenGroupedData = () => {
   abData.value = groupedData.value.flatMap((item) =>
-    Object.values(item.DateEntries).map((dateEntry) => ({
-      'No. ID': item['No. ID'],
-      Nama: item.Nama,
-      Tanggal: dateEntry.DatePart,
-      'Jam Masuk Kerja': dateEntry['Jam Masuk Kerja'] || '-',
-      'Jam Pulang Kerja': dateEntry['Jam Pulang Kerja'] || '-',
-      'Terlambat Masuk Kerja': dateEntry['Terlambat Masuk Kerja'] || '-',
-      Lembur: dateEntry['Lembur'] || '-',
-      'Status Absen': dateEntry['Status Absen'] || '-',
-    })),
-  )
+    Object.values(item.DateEntries).map((dateEntry) => {
+      // Get the day from the first entry (since all entries for the same date have the same day)
+      const hari = dateEntry.Entries[0]?.Hari || '-';
+      
+      return {
+        'No.ID': item['No.ID'],
+        Department: item.Department,
+        Nama: item.Nama,
+        Hari: hari,  // Add the day here
+        Tanggal: dateEntry.DatePart,
+        'Jam Masuk Kerja': dateEntry['Jam Masuk Kerja'] || '-',
+        'Jam Pulang Kerja': dateEntry['Jam Pulang Kerja'] || '-',
+        'Terlambat Masuk Kerja': dateEntry['Terlambat Masuk Kerja'] || '-',
+        Lembur: dateEntry['Lembur'] || '-',
+        // 'Status Absen': dateEntry['Status Absen'] || '-',
+      };
+    })
+  );
 
   if (abData.value.length) {
-    tableHeaders.value = Object.keys(abData.value[0])
+    tableHeaders.value = Object.keys(abData.value[0]);
   }
-}
+};
 
 const exportDataToExcel = () => {
   if (!abData.value.length) {

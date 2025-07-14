@@ -1,5 +1,5 @@
 <template>
-  <div class="relative">
+  <div class="relative text-black dark:text-white bg-white dark:bg-base-100">
     <!-- Navbar with toggle button -->
     <Navbar :isSidebarOpen="isSidebarOpen" @toggleSidebar="toggleSidebar" />
 
